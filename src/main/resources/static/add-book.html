@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Book - Library Management</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="navbarContainer"></div>
+
+<div class="container" style="max-width:600px;">
+    <div class="page-header"><h2>➕ Add New Book</h2></div>
+
+    <div class="form-card">
+        <div class="error-msg" id="errorMsg"></div>
+        <div class="success-msg" id="successMsg"></div>
+
+        <form id="addBookForm">
+            <div class="form-group">
+                <label>Title</label>
+                <input type="text" id="title" required placeholder="Book title">
+            </div>
+            <div class="form-group">
+                <label>ISBN</label>
+                <input type="text" id="isbn" required placeholder="e.g. 9780062315007" minlength="10" maxlength="13">
+            </div>
+            <div class="form-group">
+                <label>Genre</label>
+                <input type="text" id="genre" required placeholder="e.g. Fiction, Fantasy">
+            </div>
+            <div class="form-group">
+                <label>Total Copies</label>
+                <input type="number" id="totalCopies" required min="1" placeholder="e.g. 5">
+            </div>
+
+            <div class="form-group">
+                <label>Author</label>
+                <select id="authorId" onchange="toggleNewAuthor()">
+                    <option value="">Select an existing author...</option>
+                </select>
+            </div>
+
+            <div id="newAuthorSection">
+                <div class="form-group" style="text-align:center; margin:-8px 0 18px;">
+                    <span style="font-size:13px; color:var(--text-light);">— OR add a new author —</span>
+                </div>
+                <div class="form-group">
+                    <label>New Author Name</label>
+                    <input type="text" id="newAuthorName" placeholder="Enter new author's name">
+                </div>
+                <div class="form-group">
+                    <label>Author Email (optional)</label>
+                    <input type="email" id="newAuthorEmail" placeholder="author@example.com">
+                </div>
+                <div class="form-group">
+                    <label>Nationality (optional)</label>
+                    <input type="text" id="newAuthorNationality" placeholder="e.g. American">
+                </div>
+            </div>
+
+            <button type="submit" class="btn-primary">Add Book</button>
+            <button type="button" class="btn-secondary" onclick="window.location.href='index.html'">Cancel</button>
+        </form>
+    </div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+    requireRole('ADMIN');
+    document.getElementById('navbarContainer').innerHTML = renderNavbar();
+
+    function hideMessages() {
+        document.getElementById('errorMsg').classList.remove('show');
+        document.getElementById('successMsg').classList.remove('show');
+    }
+    function showError(msg) {
+        hideMessages();
+        const el = document.getElementById('errorMsg');
+        el.textContent = msg;
+        el.classList.add('show');
+    }
+
+    async function loadAuthors() {
+        try {
+            const authors = await apiCall('/api/authors');
+            const select = document.getElementById('authorId');
+            authors.forEach(author => {
+                const option = document.createElement('option');
+                option.value = author.id;
+                option.textContent = author.name;
+                select.appendChild(option);
+            });
+        } catch (err) {
+            showError('Failed to load authors: ' + err.message);
+        }
+    }
+
+    function toggleNewAuthor() {
+        const select = document.getElementById('authorId');
+        const newAuthorSection = document.getElementById('newAuthorSection');
+        newAuthorSection.style.display = select.value ? 'none' : 'block';
+    }
+
+    document.getElementById('addBookForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        hideMessages();
+
+        let authorId = document.getElementById('authorId').value;
+        const newAuthorName = document.getElementById('newAuthorName').value.trim();
+
+        try {
+            // Agar dropdown khali hai aur naya naam diya hai, pehle naya Author banao
+            if (!authorId && newAuthorName) {
+                const newAuthor = await apiCall('/api/authors', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name: newAuthorName,
+                        email: document.getElementById('newAuthorEmail').value || null,
+                        nationality: document.getElementById('newAuthorNationality').value || null
+                    })
+                });
+                authorId = newAuthor.id;
+            }
+
+            if (!authorId) {
+                showError('Please select an existing author or enter a new author name');
+                return;
+            }
+
+            const bookData = {
+                title: document.getElementById('title').value,
+                isbn: document.getElementById('isbn').value,
+                genre: document.getElementById('genre').value,
+                totalCopies: parseInt(document.getElementById('totalCopies').value),
+                authorId: parseInt(authorId)
+            };
+
+            await apiCall('/api/books', { method: 'POST', body: JSON.stringify(bookData) });
+            showToast('Book added successfully! 🎉', 'success');
+            setTimeout(() => window.location.href = 'index.html', 1000);
+        } catch (err) {
+            showError(err.message);
+        }
+    });
+
+    loadAuthors();
+</script>
+</body>
+</html>

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library Management - Catalog</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="navbarContainer"></div>
+
+<div class="container">
+    <div class="page-header">
+        <h2>📖 Book Catalog</h2>
+        <div class="header-actions">
+            <div class="search-bar">
+                <input type="text" id="searchInput" placeholder="Search by title, author, genre...">
+            </div>
+        </div>
+    </div>
+
+    <div id="memberBanner"></div>
+    <div id="booksContainer"><div class="loader">Loading books...</div></div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+    requireAuth();
+    document.getElementById('navbarContainer').innerHTML = renderNavbar();
+
+    const role = getRole();
+    let allBooks = [];
+
+    // Agar member hai aur memberId save nahi hai, ek banner dikhao
+    if (role === 'MEMBER' && !localStorage.getItem('memberId')) {
+        document.getElementById('memberBanner').innerHTML = `
+            <div class="info-banner">
+                ℹ️ To borrow books, please set your Member ID once.
+                <a href="my-borrows.html" style="color:var(--primary-dark); font-weight:700; margin-left:6px;">Set it here →</a>
+            </div>`;
+    }
+
+    async function loadBooks() {
+        try {
+            allBooks = await apiCall('/api/books');
+            renderBooks(allBooks);
+        } catch (err) {
+            document.getElementById('booksContainer').innerHTML =
+                `<div class="empty-state">⚠️ ${err.message}</div>`;
+        }
+    }
+
+    function getCoverUrl(isbn) {
+        return `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg?default=false`;
+    }
+
+    function renderBooks(books) {
+        const container = document.getElementById('booksContainer');
+        if (books.length === 0) {
+            container.innerHTML = `<div class="empty-state">📭 No books found</div>`;
+            return;
+        }
+
+        container.innerHTML = `<div class="books-grid">${books.map(book => `
+            <div class="book-card">
+                <img class="book-cover" src="${getCoverUrl(book.isbn)}" alt="${book.title}"
+                     onerror="this.outerHTML='<div class=\\'book-cover-fallback\\'>📕</div>'">
+                <div class="book-info">
+                    <div class="book-title">${book.title}</div>
+                    <div class="book-author">by ${book.authorName}</div>
+                    <div class="book-meta">
+                        <span class="genre-tag">${book.genre}</span>
+                        <span class="copies-info ${book.availableCopies === 0 ? 'low' : ''}">
+                            ${book.availableCopies}/${book.totalCopies} available
+                        </span>
+                    </div>
+                    ${role === 'MEMBER' ? `
+                        <button class="btn-borrow" onclick="borrowBook(${book.id})"
+                                ${book.availableCopies === 0 ? 'disabled' : ''}>
+                            ${book.availableCopies === 0 ? 'Not Available' : '📗 Borrow This Book'}
+                        </button>
+                    ` : `
+                        <button class="btn-danger-outline" onclick="deleteBook(${book.id})">🗑️ Delete Book</button>
+                    `}
+                </div>
+            </div>
+        `).join('')}</div>`;
+    }
+
+    async function borrowBook(bookId) {
+        let memberId = localStorage.getItem('memberId');
+        if (!memberId) {
+            memberId = prompt('Enter your Member ID to borrow this book:');
+            if (!memberId) return;
+            localStorage.setItem('memberId', memberId);
+        }
+
+        try {
+            await apiCall(`/api/borrow-records/borrow?bookId=${bookId}&memberId=${memberId}`, { method: 'POST' });
+            showToast('Book borrowed successfully! 🎉', 'success');
+            document.getElementById('memberBanner').innerHTML = '';
+            loadBooks();
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+
+    async function deleteBook(bookId) {
+        if (!confirm('Are you sure you want to delete this book?')) return;
+        try {
+            await apiCall(`/api/books/${bookId}`, { method: 'DELETE' });
+            showToast('Book deleted successfully', 'success');
+            loadBooks();
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+        const term = e.target.value.toLowerCase();
+        const filtered = allBooks.filter(b =>
+            b.title.toLowerCase().includes(term) ||
+            b.authorName.toLowerCase().includes(term) ||
+            b.genre.toLowerCase().includes(term)
+        );
+        renderBooks(filtered);
+    });
+
+    loadBooks();
+</script>
+</body>
+</html>

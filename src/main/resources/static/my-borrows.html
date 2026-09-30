@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Borrowed Books - Library Management</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="navbarContainer"></div>
+
+<div class="container">
+    <div class="page-header"><h2>📋 My Borrowed Books</h2></div>
+
+    <div class="form-group" style="max-width:300px; margin-bottom:10px;">
+        <label>Your Member ID</label>
+        <input type="number" id="memberIdInput" placeholder="e.g. 1">
+    </div>
+    <button class="btn-add" onclick="saveMemberIdAndLoad()" style="margin-bottom:24px;">🔍 View My Records</button>
+
+    <div id="recordsContainer"></div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+    requireRole('MEMBER');
+    document.getElementById('navbarContainer').innerHTML = renderNavbar();
+
+    const savedMemberId = localStorage.getItem('memberId');
+    if (savedMemberId) {
+        document.getElementById('memberIdInput').value = savedMemberId;
+        loadRecords(savedMemberId);
+    }
+
+    function saveMemberIdAndLoad() {
+        const memberId = document.getElementById('memberIdInput').value;
+        if (!memberId) { showToast('Please enter your Member ID', 'error'); return; }
+        localStorage.setItem('memberId', memberId);
+        loadRecords(memberId);
+    }
+
+    async function loadRecords(memberId) {
+        const container = document.getElementById('recordsContainer');
+        container.innerHTML = '<div class="loader">Loading...</div>';
+
+        try {
+            const records = await apiCall(`/api/borrow-records/member/${memberId}`);
+            renderRecords(records);
+        } catch (err) {
+            container.innerHTML = `<div class="empty-state">⚠️ ${err.message}</div>`;
+        }
+    }
+
+    function renderRecords(records) {
+        const container = document.getElementById('recordsContainer');
+        if (records.length === 0) {
+            container.innerHTML = `<div class="empty-state">📭 No borrow records found for this Member ID</div>`;
+            return;
+        }
+
+        container.innerHTML = `<div class="books-grid">${records.map(record => `
+            <div class="book-card">
+                <div class="book-info">
+                    <div class="book-title">${record.bookTitle}</div>
+                    <div class="book-meta">
+                        <span class="status-pill ${record.status}">${record.status}</span>
+                    </div>
+                    <div style="font-size:12px; color:#64748b; margin:10px 0;">
+                        📅 Borrowed: ${record.borrowDate}<br>
+                        ${record.returnDate ? `✅ Returned: ${record.returnDate}` : '⏳ Not returned yet'}
+                    </div>
+                    ${record.status === 'BORROWED' ? `
+                        <button class="btn-borrow" onclick="returnBook(${record.id})">📤 Return This Book</button>
+                    ` : ''}
+                </div>
+            </div>
+        `).join('')}</div>`;
+    }
+
+    async function returnBook(recordId) {
+        try {
+            await apiCall(`/api/borrow-records/${recordId}/return`, { method: 'PUT' });
+            showToast('Book returned successfully! 🎉', 'success');
+            loadRecords(localStorage.getItem('memberId'));
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Members - Library Management</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="navbarContainer"></div>
+
+<div class="container">
+    <div class="page-header"><h2>👥 Members</h2></div>
+    <div id="membersContainer"><div class="loader">Loading members...</div></div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+    requireRole('ADMIN');
+    document.getElementById('navbarContainer').innerHTML = renderNavbar();
+
+    async function loadMembers() {
+        try {
+            const members = await apiCall('/api/members');
+            const container = document.getElementById('membersContainer');
+            if (members.length === 0) {
+                container.innerHTML = `<div class="empty-state">📭 No members yet</div>`;
+                return;
+            }
+            container.innerHTML = `<div class="books-grid">${members.map(m => `
+                <div class="book-card">
+                    <div class="book-info">
+                        <div class="book-title">${m.name}</div>
+                        <div class="book-author">🆔 Member ID: ${m.id}</div>
+                        <div style="font-size:13px; color:#64748b;">✉️ ${m.email}</div>
+                        <div style="font-size:13px; color:#64748b;">📞 ${m.phoneNumber || 'N/A'}</div>
+                    </div>
+                </div>
+            `).join('')}</div>`;
+        } catch (err) {
+            document.getElementById('membersContainer').innerHTML = `<div class="empty-state">⚠️ ${err.message}</div>`;
+        }
+    }
+
+    loadMembers();
+</script>
+</body>
+</html>
